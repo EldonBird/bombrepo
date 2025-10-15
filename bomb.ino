@@ -43,7 +43,11 @@ class Wires : public Module {
       }
       wires[i] = analogRead(i)>300;
     }
-  } 
+  }
+
+  bool complete() override {
+    return true;
+  }
   
 };
 
