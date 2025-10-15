@@ -1,9 +1,26 @@
+float timer_multiplier = 1.0;
+
+int failures = 0;
+
+// explode (instant fail)
+void explode() {
+  // TODO hardware reset after whatever explosion effect
+}
+
+// use this function when someone fails to count down faster or blow up
+void failed() {
+  failures++;
+  if (failures >= 3) explode(); 
+  timer_multiplier += 0.5;
+}
+
 
 class Module {
 
   //public:
   virtual void setup() = 0; 
   virtual void process() = 0;
+  virtual bool complete() = 0;
 };
 
 class Wires : public Module {
@@ -43,8 +60,12 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-  
+  // TODO vector of 
   wiresModule.process();
+
+  if (wiresModule.complete()) {
+    Serial.println("you win");
+  }
 
 }
 
