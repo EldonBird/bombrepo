@@ -12,8 +12,8 @@ const int YELLOW = 3;
 
 // Predefined PIN numbers (please change these to be accurate later) - hunter
 
-const int SIMONBUTTONPINS[] = {5, 6, 7, 8};
-const int SIMONLEDPINS[] = {5, 6, 7, 8};
+const int SIMONBUTTONPINS[] = {13, 12, 11, 10};
+const int SIMONLEDPINS[] = {4, 5, 6, 7};
 
 // explode (instant fail)
 void explode() {
@@ -177,9 +177,11 @@ class SimonSays : public Module {
 
           if(i == correct_color){
             Current++;
+            Serial.print("Correct Guess has been made");
           }
           else{
-            failed();
+            Serial.print("Wrong Guess");
+            //failed(); removed for now add this back later
           }
           
         }
@@ -212,7 +214,7 @@ class SimonSays : public Module {
 };
 
 
-
+SimonSays simonsaysModule = SimonSays();
 
 
 
@@ -222,8 +224,10 @@ class SimonSays : public Module {
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600); // Initialize serial communication
+  randomSeed(analogRead(A0)); // apparently eneded to generate random numbers?
 
   wiresModule.setup();
+  simonsaysModule.setup();
 }
 
 
@@ -231,17 +235,17 @@ void setup() {
 void loop() {
   // put your main code here, to run repeatedly:
   // TODO vector of 
-  wiresModule.process();
+  //wiresModule.process();
 
-  if (wiresModule.complete()) {
-    Serial.println("you win");
-  }
+  // if (wiresModule.complete()) {
+  //   Serial.println("you win");
+  // }
 
-  if(Simonsays.complete()){
-    Serial.println("You won Simon Says")
+  if(simonsaysModule.complete()){
+    Serial.println("You won Simon Says");
   }
   else{
-    Simonsays.process();
+    simonsaysModule.process();
   }
 
 
