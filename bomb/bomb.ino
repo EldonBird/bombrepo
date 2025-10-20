@@ -1,3 +1,8 @@
+#include <LiquidCrystal_I2C.h>
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+
 float timer_multiplier = 1.0;
 
 // FAILURES = STRIKES - Hunter
@@ -14,6 +19,20 @@ const int YELLOW = 3;
 
 const int SIMONBUTTONPINS[] = {13, 12, 11, 10};
 const int SIMONLEDPINS[] = {4, 5, 6, 7};
+const int CapacitorButtonPin = 3;
+
+
+byte fullBlock[8] = {
+  0b11111,
+  0b11111,
+  0b11111,
+  0b11111,
+  0b11111,
+  0b11111,
+  0b11111,
+  0b11111
+};
+
 
 // explode (instant fail)
 void explode() {
@@ -69,11 +88,87 @@ Wires wiresModule = Wires();
 
 
 
+class Capacitor : public Module {
 
 
-const int NO_Strikes = 0;
-const int ONE_Strikes = 1;
-const int TWO_Strikes = 2;
+  private:
+    const int totalBlocks = 16;
+    int charge_level = 0;
+    unsigned long lastChargeTime = 0;
+    unsigned long lastDischargeTime = 0;
+
+    const long chargeInterval = 1000; // 1 second per block (Charging Speed)
+    const long dischargeInterval = 500; // 0.5 seconds per block (Discharge Speed)
+
+    byte fullBlock[8] = {
+      0b11111,
+      0b11111,
+      0b11111,
+      0b11111,
+      0b11111,
+      0b11111,
+      0b11111,
+      0b11111
+    };
+
+    void updateDisplay() {
+      lcd.setCursor(0, 0);
+      lcd.print("                ");
+      lcd.setCursor(0, 1);
+      lcd.print("                ");
+
+      for (int i = 0; i < charge_level; i++) {
+        lcd.setCursor(i, 0);
+        lcd.write((byte)0);
+
+        lcd.setCursor(i, 1);
+        lcd.write((byte)0);
+      }
+    }
+      
+  public:
+    void setup() override {
+      
+
+
+    }
+
+    void process() override {
+        bool buttonState = digitalRead(CapacitorButtonPin) == LOW; 
+        unsigned long currentTime = millis();
+
+        if(charge_level >= 16){
+            explode();
+        }
+
+        // discharging
+        if (buttonState) {
+            if (currentTime - lastDischargeTime >= dischargeInterval) {
+                lastDischargeTime = currentTime;
+                if (charge_level > 0) {
+                    charge_level--; 
+                    updateDisplay();
+                }
+            }
+        } 
+        // charging
+        else {
+            if (currentTime - lastChargeTime >= chargeInterval) {
+                lastChargeTime = currentTime;
+                if (charge_level < totalBlocks) {
+                    charge_level++;
+                    updateDisplay();
+                }
+            }
+        }
+    }
+    
+    bool complete() override {
+
+    }
+
+};
+Capacitor capacitormodule = Capacitor();
 
 
 
@@ -221,7 +316,19 @@ SimonSays simonsaysModule = SimonSays();
 
 
 
+
+
 void setup() {
+
+
+  // setup for capacitor
+
+  lcd.init();
+  lcd.backlight();
+  pinMode(CapacitorButtonPin, INPUT_PULLUP);
+  lcd.createChar(0, fullBlock);
+  lcd.setCursor(0, 0);
+
   // put your setup code here, to run once:
   Serial.begin(9600); // Initialize serial communication
   randomSeed(analogRead(A0)); // apparently eneded to generate random numbers?
