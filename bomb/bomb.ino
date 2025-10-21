@@ -37,10 +37,12 @@ byte fullBlock[8] = {
 // explode (instant fail)
 void explode() {
   // TODO hardware reset after whatever explosion effect
+  Serial.println(" EXPLODED!!!!!!!!!!!!!!!!!!!");
 }
 
 // use this function when someone fails to count down faster or blow up
 void failed() {
+  Serial.print("failed " + String(failures));
   failures++;
   if (failures >= 3) explode(); 
   timer_multiplier += 0.5;
@@ -128,7 +130,7 @@ class Capacitor : public Module {
       
   public:
     void setup() override {
-      
+
 
 
     }
@@ -168,7 +170,7 @@ class Capacitor : public Module {
     }
 
 };
-Capacitor capacitormodule = Capacitor();
+Capacitor capacitorModule = Capacitor();
 
 
 
@@ -191,6 +193,7 @@ class SimonSays : public Module {
     
     int Order[5]; 
     int Current = 0;
+    int input_index = 0;
     bool is_flashing = false;
     long last_action_time = 0;
     int flash_duration = 500;
@@ -207,17 +210,39 @@ class SimonSays : public Module {
         is_led_on = false;
     }
 
+    void start_pattern_flash() {
+        is_flashing = true;
+        pattern_index = 0;
+        last_action_time = millis();
+        if (Current < 5) {
+            digitalWrite(SIMONLEDPINS[Order[pattern_index]], HIGH);
+            is_led_on = true;
+        }
+    }
+
+    bool user_input_active() {
+      for(int i = 0; i < 4; i++){
+        if(button_state[i] == true) return true;
+      }
+      return false;
+    }
+
+
   public:
   
     void setup() override {
 
-      for(int i = 0; i < 5; i++){
-        Order[i] = random(0, 4);
-      }
-      is_flashing = true;
-      last_action_time = millis();
-      all_off();
+    for (int i = 0; i < 4; i++) {
+    pinMode(SIMONLEDPINS[i], OUTPUT);
+    pinMode(SIMONBUTTONPINS[i], INPUT_PULLUP); // Use INPUT_PULLUP
+    } 
+
+    for(int i = 0; i < 5; i++){
+    Order[i] = random(0, 4);
     }
+    Current = 0; 
+    start_pattern_flash();
+  }
 
     void pattern() {
 
@@ -250,6 +275,7 @@ class SimonSays : public Module {
         }
       } 
     }
+    
 
     void check_inputs() {
 
@@ -257,46 +283,74 @@ class SimonSays : public Module {
 
         bool new_state = digitalRead(SIMONBUTTONPINS[i]) == LOW;
 
-        if(new_state && !button_state[i]){
-          
-          is_flashing = false;
-          pattern_index = 0;
-          all_off();
-
-          int correct_color;
-          if(serial_number_vowel) {
-            correct_color = VOWEL_TABLE[failures][Order[Current]];
-          } else{
-            correct_color = NO_VOWEL_TABLE[failures][Order[Current]];
-          }
-
-          if(i == correct_color){
-            Current++;
-            Serial.print("Correct Guess has been made");
-          }
-          else{
-            Serial.print("Wrong Guess");
-            //failed(); removed for now add this back later
-          }
-          
+        if(new_state == true && button_state[i] == true){
+          return;
         }
-        button_state[i] = new_state;
+        else if(new_state == false && button_state[i] == false){
+          return;
+        }
+        else if(new_state == false && button_state[i] == true){
+          button_state[i] = false;
+        }
+        else{
+
+          all_off();
+          is_flashing = false;
+
+          int pattern_color_index = Order[input_index];
+          int correct_button_color;
+
+          if(serial_number_vowel){
+            correct_button_color = VOWEL_TABLE[failures][pattern_color_index];
+          } else{
+            correct_button_color = NO_VOWEL_TABLE[failures][pattern_color_index];
+          }
+
+          Serial.print("Expected color (index): ");
+          Serial.println(correct_button_color);
+
+          if(i == correct_button_color){
+            input_index++;
+            last_action_time = millis();
+            button_state[i] = new_state; // <-- **ADD THIS LINE**
+
+            if(input_index > Current){
+              Current++;
+              input_index = 0;
+               if(Current < 5) {
+                  Serial.println("--- Sequence Completed. New length: " + String(Current + 1));
+                  all_off();
+                  start_pattern_flash();
+               }
+            }
+          } else{
+
+            Serial.println("Wrong Guess at input index: " + String(input_index));
+            failed();
+            input_index = 0;
+            all_off();
+            start_pattern_flash();
+            button_state[i] = new_state; // <-- **ADD THIS LINE**
+
+          }
+        }
+
+        // button_state[i] = new_state; // <-- **REMOVE THIS LINE**
+
       }
+
+
     }
 
     void process() override{
       check_inputs();
 
-      if(is_flashing){
+      if(is_flashing && !user_input_active()){
         pattern();
       } else if (Current < 5) {
 
         if(millis() - last_action_time > 5000){
-
-          is_flashing = true;
-          last_action_time = millis();
-          pattern_index = 0;
-
+          start_pattern_flash();
         }
 
       }
@@ -335,11 +389,18 @@ void setup() {
 
   wiresModule.setup();
   simonsaysModule.setup();
+  capacitorModule.setup();
 }
 
 
 
 void loop() {
+
+  if (failures >= 3) return;
+
+
+
+
   // put your main code here, to run repeatedly:
   // TODO vector of 
   //wiresModule.process();
@@ -347,14 +408,15 @@ void loop() {
   // if (wiresModule.complete()) {
   //   Serial.println("you win");
   // }
+  
 
   if(simonsaysModule.complete()){
     Serial.println("You won Simon Says");
   }
-  else{
+  else{ 
     simonsaysModule.process();
   }
-
+  //capacitorModule.process();
 
 }
 
