@@ -34,6 +34,26 @@ byte fullBlock[8] = {
 };
 
 
+const int MEMORYBUTTONPINS[] = {22, 23, 24, 25}; 
+
+const int MEMORYLEDPINS[] = {26, 27, 28, 29};
+
+const int SEG_A_PIN = 30;
+const int SEG_B_PIN = 31;
+const int SEG_C_PIN = 32;
+const int SEG_D_PIN = 33;
+const int SEG_E_PIN = 34;
+const int SEG_F_PIN = 35;
+const int SEG_G_PIN = 36;
+const int SEG_DP_PIN = 37;
+
+const int DIG_1_PIN = 38;
+const int DIG_2_PIN = 39;
+const int DIG_3_PIN = 40;
+const int DIG_4_PIN = 41;
+
+
+
 // explode (instant fail)
 void explode() {
   // TODO hardware reset after whatever explosion effect
@@ -366,7 +386,149 @@ class SimonSays : public Module {
 SimonSays simonsaysModule = SimonSays();
 
 
+class Memory : public Module {
+private:
+  const int MEMORYBUTTONPINS[4] = {A1, A2, A3, A4}; // Placeholder pins
+  const int MEMORYLEDPINS[4] = {8, 9, 10, 11};     // Placeholder pins
 
+  int current_stage = 1;
+  int display_number = 0;
+  int button_label[4] = {1, 2, 3, 4};
+  int history_position[5] = {0, 0, 0, 0, 0}; // Stores the position (1-4) of the correct button pressed
+  int history_label[5] = {0, 0, 0, 0, 0};    // Stores the label (1-4) of the correct button pressed
+
+  bool button_state[4] = {false, false, false, false};
+  long last_input_time = 0;
+  const long debounce_delay = 50;
+
+  void generate_stage() {
+    randomSeed(analogRead(A0) + millis());
+    // Display number is a random digit 1-4
+    display_number = random(1, 5);
+
+    // Button labels (1-4, shuffled)
+    for (int i = 0; i < 4; i++) button_label[i] = i + 1;
+    for (int i = 0; i < 4; i++) {
+      int swap_index = random(i, 4);
+      int temp = button_label[i];
+      button_label[i] = button_label[swap_index];
+      button_label[swap_index] = temp;
+    }
+  }
+
+  int get_correct_position(int stage) {
+    if (stage == 1) {
+      if (display_number == 1 || display_number == 2) return 2;
+      if (display_number == 3) return 3;
+      if (display_number == 4) return 4;
+    } else if (stage == 2) {
+      if (display_number == 1) return 4;
+      if (display_number == 2 || display_number == 4) return history_position[1];
+      if (display_number == 3) return 1;
+    } else if (stage == 3) {
+      if (display_number == 1) return history_label[2];
+      if (display_number == 2) return history_label[1];
+      if (display_number == 3) return 3;
+      if (display_number == 4) return 4;
+    } else if (stage == 4) {
+      if (display_number == 1) return history_position[1];
+      if (display_number == 2) return 1;
+      if (display_number == 3 || display_number == 4) return history_position[2];
+    } else if (stage == 5) {
+      if (display_number == 1) return history_label[1];
+      if (display_number == 2) return history_label[2];
+      if (display_number == 3) return history_label[4];
+      if (display_number == 4) return history_label[3];
+    }
+    return 0; // Should not happen
+  }
+
+  void update_display() {
+    // Placeholder for 7-Segment Display update
+    // You would use your SevSeg or custom display function here.
+    Serial.print("MEMORY: Stage ");
+    Serial.print(current_stage);
+    Serial.print(", Display: ");
+    Serial.print(display_number);
+    Serial.print(", Labels: ");
+    for(int i=0; i<4; i++) {
+      Serial.print(button_label[i]);
+      Serial.print(" ");
+    }
+    Serial.println();
+  }
+
+  void handle_correct_guess(int pos, int label) {
+    history_position[current_stage] = pos;
+    history_label[current_stage] = label;
+    current_stage++;
+    if (current_stage <= 5) {
+      generate_stage();
+      update_display();
+      Serial.println("Correct! Moving to next stage.");
+    } else {
+      Serial.println("Memory Module Complete!");
+    }
+  }
+
+  void handle_incorrect_guess() {
+    Serial.println("Incorrect guess!");
+    failed(); // Calls the global failed() function to add a strike
+    current_stage = 1; // Reset to stage 1 on failure
+    for(int i = 1; i <= 5; i++) {
+      history_position[i] = 0;
+      history_label[i] = 0;
+    }
+    generate_stage();
+    update_display();
+  }
+
+public:
+  void setup() override {
+    for (int i = 0; i < 4; i++) {
+      pinMode(MEMORYBUTTONPINS[i], INPUT_PULLUP);
+      pinMode(MEMORYLEDPINS[i], OUTPUT);
+      digitalWrite(MEMORYLEDPINS[i], LOW);
+    }
+    generate_stage();
+    update_display();
+    Serial.println("Memory Module setup complete.");
+  }
+
+  void process() override {
+    if (current_stage > 5) return;
+
+    if (millis() - last_input_time < debounce_delay) return;
+
+    for (int i = 0; i < 4; i++) {
+      bool new_state = digitalRead(MEMORYBUTTONPINS[i]) == LOW;
+      
+      if (new_state && !button_state[i]) { // Button pressed
+        button_state[i] = true;
+        last_input_time = millis();
+
+        int correct_pos = get_correct_position(current_stage);
+        
+        // i is the button index (0-3), i+1 is the position (1-4)
+        if (i + 1 == correct_pos) {
+          handle_correct_guess(i + 1, button_label[i]);
+        } else {
+          handle_incorrect_guess();
+        }
+        break; // Process one button press at a time
+      } else if (!new_state && button_state[i]) { // Button released
+        button_state[i] = false;
+        last_input_time = millis();
+      }
+    }
+  }
+
+  bool complete() override {
+    return current_stage > 5;
+  }
+};
+
+Memory memoryModule = Memory(); // Create the instance
 
 
 
