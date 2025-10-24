@@ -234,7 +234,7 @@ is_led_on = true;
 
     for (int i = 0; i < 4; i++) {
     pinMode(SIMONLEDPINS[i], OUTPUT);
-pinMode(SIMONBUTTONPINS[i], INPUT_PULLUP); // Use INPUT_PULLUP
+  pinMode(SIMONBUTTONPINS[i], INPUT_PULLUP); // Use INPUT_PULLUP
     } 
 
     for(int i = 0; i < 5; i++){
@@ -247,14 +247,14 @@ pinMode(SIMONBUTTONPINS[i], INPUT_PULLUP); // Use INPUT_PULLUP
     void pattern() {
 
       long current_time = millis();
-int current_color = Order[pattern_index];
+      int current_color = Order[pattern_index];
 
       if(pattern_index < Current + 1) {
 
         if(is_led_on){
             if(current_time - last_action_time >= flash_duration){
                 digitalWrite(SIMONLEDPINS[current_color], LOW);
-is_led_on = false;
+                is_led_on = false;
                 last_action_time = current_time;
             }
         } else {
@@ -262,13 +262,13 @@ is_led_on = false;
                 
                 if(pattern_index < Current){
                     pattern_index++;
-current_color = Order[pattern_index];
+                    current_color = Order[pattern_index];
                     digitalWrite(SIMONLEDPINS[current_color], HIGH);
                     is_led_on = true;
                     last_action_time = current_time;
-} else{
+                  } else{
                     is_flashing = false;
-pattern_index = 0;
+                    pattern_index = 0;
                     all_off();
                 }
             }
@@ -279,64 +279,55 @@ pattern_index = 0;
 
     void check_inputs() {
 
-      for(int i = 0; i < 4; i++){
+  for(int i = 0; i < 4; i++){
 
-        bool new_state = digitalRead(SIMONBUTTONPINS[i]) == LOW;
-if(new_state == true && button_state[i] == true){
-          return;
-}
-        else if(new_state == false && button_state[i] == false){
-          return;
-}
-        else if(new_state == false && button_state[i] == true){
-          button_state[i] = false;
-}
-        else{
+    bool new_state = digitalRead(SIMONBUTTONPINS[i]) == LOW;
 
-          all_off();
-is_flashing = false;
+    if(new_state && !button_state[i]){ // Button pressed: state changed from HIGH (unpressed) to LOW (pressed)
 
-          int pattern_color_index = Order[input_index];
-          int correct_button_color;
+      all_off();
+      is_flashing = false;
 
-          if(serial_number_vowel){
-            correct_button_color = VOWEL_TABLE[failures][pattern_color_index];
-} else{
-            correct_button_color = NO_VOWEL_TABLE[failures][pattern_color_index];
-}
+      int pattern_color_index = Order[input_index];
+      int correct_button_color;
 
-          Serial.print("Expected color (index): ");
-          Serial.println(correct_button_color);
-if(i == correct_button_color){
-            input_index++;
-            last_action_time = millis();
-button_state[i] = new_state; 
-
-            if(input_index > Current){
-              Current++;
-input_index = 0;
-               if(Current < 5) {
-                  Serial.println("--- Sequence Completed. New length: " + String(Current + 1));
-all_off();
-                  start_pattern_flash();
-               }
-            }
-          } else{
-
-            Serial.println("Wrong Guess at input index: " + String(input_index));
-failed();
-            input_index = 0;
-            all_off();
-            start_pattern_flash();
-            button_state[i] = new_state; 
-
-          }
-        }
-
+      if(serial_number_vowel){
+        correct_button_color = VOWEL_TABLE[failures][pattern_color_index];
+      } else{
+        correct_button_color = NO_VOWEL_TABLE[failures][pattern_color_index];
       }
 
+      Serial.print("Expected color (index): ");
+      Serial.println(correct_button_color);
+      if(i == correct_button_color){
+        input_index++;
+        last_action_time = millis();
+        button_state[i] = new_state; 
 
+        if(input_index > Current){
+          Current++;
+          input_index = 0;
+           if(Current < 5) {
+              Serial.println("--- Sequence Completed. New length: " + String(Current + 1));
+              all_off();
+              start_pattern_flash();
+           }
+        }
+      } else{
+
+        Serial.println("Wrong Guess at input index: " + String(input_index));
+        failed();
+        input_index = 0;
+        all_off();
+        start_pattern_flash();
+        button_state[i] = new_state; 
+
+      }
+    } else if (!new_state && button_state[i]) { // Button released: state changed from LOW (pressed) to HIGH (unpressed)
+        button_state[i] = false;
     }
+  }
+}
 
     void process() override{
       check_inputs();
@@ -445,19 +436,17 @@ private:
   int display_number = 0;
   int button_label[4] = {1, 2, 3, 4};
   int history_position[5] = {0, 0, 0, 0, 0};
-  // Stores the position (1-4) of the correct button pressed [cite: 73]
   int history_label[5] = {0, 0, 0, 0, 0};
-  // Stores the label (1-4) of the correct button pressed [cite: 74]
 
   bool button_state[4] = {false, false, false, false};
   long last_input_time = 0;
   const long debounce_delay = 50;
 
+  bool currently_pressed;
+
   void generate_stage() {
     randomSeed(analogRead(A0) + millis());
-    // Display number is a random digit 1-4 [cite: 76]
     display_number = random(1, 5);
-    // Button labels (1-4, shuffled) [cite: 77]
     for (int i = 0; i < 4; i++) button_label[i] = i + 1;
     for (int i = 0; i < 4; i++) {
       int swap_index = random(i, 4);
@@ -527,9 +516,12 @@ private:
   void handle_incorrect_guess() {
     Serial.println("Incorrect guess!");
     failed();
-    // Calls the global failed() function to add a strike [cite: 97]
-    current_stage = 1;
-    // Reset to stage 1 on failure [cite: 98]
+
+    if (failures >= 3) {
+      return; 
+    }
+    
+    current_stage = 1; 
     for(int i = 1; i <= 5; i++) {
       history_position[i] = 0;
       history_label[i] = 0;
@@ -551,30 +543,33 @@ public:
   }
 
   void process() override {
-    if (current_stage > 5) return;
-    if (millis() - last_input_time < debounce_delay) return;
+  if (current_stage > 5) return;
+  if (millis() - last_input_time < debounce_delay) return;
 
-    for (int i = 0; i < 4; i++) {
-      bool new_state = digitalRead(MEMORYBUTTONPINS[i]) == LOW;
-      if (new_state && !button_state[i]) { // Button pressed
-        button_state[i] = true;
-        last_input_time = millis();
+  for (int i = 0; i < 4; i++) {
+    bool new_state = digitalRead(MEMORYBUTTONPINS[i]) == LOW;
+    if (new_state && !button_state[i]) {
+      button_state[i] = true;
+      last_input_time = millis();
 
-        int correct_pos = get_correct_position(current_stage);
-        
-        // i is the button index (0-3), i+1 is the position (1-4)
-        if (i + 1 == correct_pos) {
-          handle_correct_guess(i + 1, button_label[i]);
-        } else {
-          handle_incorrect_guess();
-        }
-        break; // Process one button press at a time
-      } else if (!new_state && button_state[i]) { // Button released
-        button_state[i] = false;
-        last_input_time = millis();
+      int correct_pos = get_correct_position(current_stage);
+
+      if (i + 1 == correct_pos) {
+        handle_correct_guess(i + 1, button_label[i]);
+      } else {
+        handle_incorrect_guess();
+        // Add this line to enforce debounce after a failure
+        last_input_time = millis(); 
+        // button_state[i] remains true, forcing user release
+        return;
       }
+      break;
+    } else if (!new_state && button_state[i]) {
+      button_state[i] = false;
+      last_input_time = millis();
     }
   }
+}
 
   bool complete() override {
     return current_stage > 5;
@@ -638,7 +633,6 @@ void loop() {
   //   simonsaysModule.process();
   // }
   
-  // ADDED MEMORY MODULE PROCESSING [cite: 114]
   if(memoryModule.complete()){
     write_number_to_7seg(memoryModule.get_display_number()); // Keep final number displayed
     Serial.println("You won Memory");
@@ -646,6 +640,6 @@ void loop() {
   else{ 
     memoryModule.process();
   }
-  //capacitorModule.process();
+  capacitorModule.process();
 
 }
